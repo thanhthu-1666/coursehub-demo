@@ -63,3 +63,32 @@ def search_courses(keyword):
             results.append(course)
     return results
 print(search_courses("web"))
+
+def enroll_student(student_id, course_code):
+    student_exists = any(s["id"] == student_id for s in students)
+    if not student_exists:
+        return False, "Ma sinh vien khong ton tai"
+
+    course = find_course(course_code)
+    if course is None:
+        return False, "Ma hoc phan khong ton tai"
+
+    if course["enrolled"] >= course["capacity"]:
+        return False, "Lop da du so luong"
+
+    already_enrolled = any(e["student_id"] == student_id and e["course_code"] == course_code 
+    for e in enrollments
+    )
+    if already_enrolled:
+        return False, "Sinh vien da dang ky hoc phan nay"
+
+    enrollments.append({"student_id": student_id, "course_code": course_code})
+    course["enrolled"] += 1
+    return True, "Dang ky thanh cong"
+
+# 5 Tình huống test theo bài tập 2:
+print(enroll_student("22000002", "INT2204"))  # 1. Đăng ký thành công
+print(enroll_student("22000001", "INT2204"))  # 2. Đăng ký trùng
+print(enroll_student("22000002", "INT2205"))  # 3. Lớp đầy
+print(enroll_student("22000002", "INT9999"))  # 4. Mã học phần không tồn tại
+print(enroll_student("99999999", "INT2204"))  # 5. Mã sinh viên không tồn tại
