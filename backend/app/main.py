@@ -235,3 +235,117 @@ AND class_section_id = :class_section_id
                 detail="Khong tim thay dang ky can huy",
             )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.get("/lecturers")
+def list_lecturers() -> list[dict[str, object]]:
+    sql = """
+        SELECT id, name
+        FROM lecturers
+        ORDER BY id
+    """
+    with engine.connect() as connection:
+        rows = connection.execute(text(sql)).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@app.get("/sections/{section_id}")
+def get_section(section_id: str) -> dict[str, object]:
+    sql = """
+        SELECT class_id, course_code, capacity, enrolled, remaining
+        FROM v_section_summary
+        WHERE class_id = :section_id
+    """
+    with engine.connect() as connection:
+        row = connection.execute(
+            text(sql),
+            {"section_id": section_id},
+        ).mappings().first()
+        
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Khong tim thay lop hoc phan",
+        )
+    return dict(row)
+
+@app.patch("/sections/{section_id}/capacity")
+def update_section_capacity(section_id: str, payload: dict[str, int]) -> dict[str, object]:
+    new_capacity = payload.get("capacity")
+    if new_capacity is None or new_capacity <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Capacity phai la so nguyen lon hon 0",
+        )
+        
+    check_sql = """
+        SELECT cs.capacity, COUNT(e.student_id) AS enrolled
+        FROM class_sections AS cs
+        LEFT JOIN enrollments AS e ON e.class_section_id = cs.id
+        WHERE cs.id = :section_id
+        GROUP BY cs.id, cs.capacity
+    """
+    update_sql = """
+        UPDATE class_sections
+        SET capacity = :capacity
+        WHERE id = :section_id
+    """
+    
+    with engine.begin() as connection:
+        section = connection.execute(
+            text(check_sql),
+            {"section_id": section_id},
+        ).mappings().first()
+        
+        if section is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Khong tim thay lop hoc phan",
+            )
+            
+        if new_capacity < int(section["enrolled"]):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Capacity moi khong duoc nho hon so sinh vien da dang ky",
+            )
+            
+        connection.execute(
+            text(update_sql),
+            {"capacity": new_capacity, "section_id": section_id},
+        )
+        
+    return {"message": "Cap nhat capacity thanh cong", "class_id": section_id, "new_capacity": new_capacity}
+
+
+@app.get("/courses")
+def list_courses(
+    q: str | None = Query(default=None, min_length=1),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+) -> list[dict[str, object]]:
+    sql = """
+        SELECT code, name, credits
+        FROM courses
+    """
+    parameters: dict[str, object] = {}
+    
+    if q is not None:
+        keyword = q.strip().lower()
+        if not keyword:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tu khoa tim kiem khong duoc rong",
+            )
+        sql += """
+            WHERE LOWER(code) LIKE :keyword
+                OR LOWER(name) LIKE :keyword
+        """
+        parameters["keyword"] = f"%{keyword}%"
+        
+    sql += " ORDER BY code OFFSET :skip LIMIT :limit"
+    parameters["skip"] = skip
+    parameters["limit"] = limit
+    
+    with engine.connect() as connection:
+        rows = connection.execute(text(sql), parameters).mappings().all()
+
+    return [dict(row) for row in rows]
