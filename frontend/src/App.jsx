@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import Notice from "./components/Notice.jsx";
 import SectionTable from "./components/SectionTable.jsx";
 import EnrollmentList from "./components/EnrollmentList.jsx";
+import StudentForm from "./components/StudentForm.jsx";
 
 export default function App() {
   const [draftId, setDraftId] = useState("22000004");
@@ -12,6 +13,7 @@ export default function App() {
   const [enrollments, setEnrollments] = useState([]);
   const [search, setSearch] = useState("");
   const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [selectedCourseCode, setSelectedCourseCode] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -97,11 +99,12 @@ export default function App() {
       ?? section.course_code,
     registered: enrollments.some((item) => item.class_section_id ===
       section.class_id),
-  })).filter((row) => (
-    `${row.class_id} ${row.course_code}
-    ${row.course_name}`.toLowerCase().includes(keyword)
-    && (!onlyAvailable || row.remaining > 0)
-  ));
+  })).filter((row) => {
+    const matchKeyword = `${row.class_id} ${row.course_code} ${row.course_name}`.toLowerCase().includes(keyword);
+    const matchCourseCode = selectedCourseCode === "ALL" || row.course_code === selectedCourseCode; // <-- ĐIỀU KIỆN LỌC MÃ MÔN
+    const matchAvailable = !onlyAvailable || row.remaining > 0;
+    return matchKeyword && matchCourseCode && matchAvailable;
+  });
   const disabled = loading || busy || Boolean(error);
   return (
     <main className="container">
@@ -115,21 +118,18 @@ export default function App() {
         Môi trường thực hành. Nhập mã sinh viên để thử dữ liệu, không phải đăng
         nhập.
       </p>
-      <section className="panel">
-        <h2>1. Chọn sinh viên</h2>
-        <form className="student-form" onSubmit={chooseStudent}>
-          <label htmlFor="student-id">Mã sinh viên</label>
-          <input id="student-id" value={draftId} maxLength={8} required
-            inputMode="numeric" onChange={(e) => setDraftId(e.target.value)}
-            disabled={busy} />
-          <button type="submit" disabled={busy}>Xem đăng ký</button>
-          <button type="button" className="secondary" disabled={busy || loading}
-            onClick={() => setRefresh((value) => value + 1)}>Tải lại dữ
-            liệu</button>
-        </form>
-        <p className="muted">Dữ liệu đang xem: <strong>{studentId}</strong>.
-          Mã mẫu: 22000001–22000004.</p>
-      </section>
+
+      {/* Thay thế phần form chọn sinh viên cũ bằng component StudentForm */}
+      <StudentForm 
+        draftId={draftId}
+        setDraftId={setDraftId}
+        onSubmit={chooseStudent}
+        busy={busy}
+        loading={loading}
+        setRefresh={setRefresh}
+        studentId={studentId}
+      />
+
       <Notice kind={notice.kind}>{notice.text}</Notice>
       <Notice kind="error">{error}</Notice>
       {loading && <Notice>Đang tải dữ liệu từ API...</Notice>}
@@ -141,6 +141,18 @@ export default function App() {
               <label htmlFor="search">Tìm lớp / học phần</label>
               <input id="search" value={search} placeholder="Ví dụ: web"
                 onChange={(e) => setSearch(e.target.value)} />
+              <div className="course-code-filter" style={{ display: "flex", gap: "8px", margin: "8px 0" }}>
+                {["ALL", "INT2204", "INT2205", "INT2206"].map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => setSelectedCourseCode(code)}
+                    className={selectedCourseCode === code ? "active" : "secondary"}
+                  >
+                    {code === "ALL" ? "Tất cả" : code}
+                  </button>
+                ))}
+              </div>
               <label className="check">
                 <input type="checkbox" checked={onlyAvailable}
                   onChange={(e) => setOnlyAvailable(e.target.checked)} />
@@ -155,7 +167,8 @@ export default function App() {
             <p className="muted">Sinh viên {studentId} · {enrollments.length}
               lớp</p>
             <EnrollmentList rows={enrollments} disabled={disabled}
-              onCancel={(id) => changeEnrollment(id, true)} />
+              onCancel={(id) => changeEnrollment(id, true)}
+              studentId={studentId} />
           </section>
         </div>
       )}
