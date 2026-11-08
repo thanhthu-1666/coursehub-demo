@@ -149,7 +149,43 @@ def list_student_enrollments(student_id: str) -> list[dict[str, object]]:
         ).mappings().all()
 
         return [dict(row) for row in rows]
+    
+@app.get("/enrollment-events")
+def get_enrollment_events(
+    student_id: str | None = None,
+    event_type: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[dict]:
+    safe_limit = max(1, min(limit, 100))
+    safe_skip = max(0, skip)
 
+    sql = """
+        SELECT id, student_id, class_section_id, event_type, source, dataset, occurred_at
+        FROM enrollment_events
+        WHERE 1 = 1
+    """
+    params: dict[str, object] = {
+        "limit": safe_limit,
+        "skip": safe_skip,
+    }
+
+    if student_id:
+        sql += " AND student_id = :student_id"
+        params["student_id"] = student_id
+
+    if event_type:
+        sql += " AND event_type = :event_type"
+        params["event_type"] = event_type
+
+    sql += """
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT :limit OFFSET :skip
+    """
+
+    with engine.connect() as connection:
+        rows = connection.execute(text(sql), params).mappings().all()
+        return [dict(row) for row in rows]
 @app.post(
 "/enrollments",
 status_code=status.HTTP_201_CREATED,
