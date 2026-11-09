@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
 title="CourseHub API",
 version="0.4.0",
-description="API thuc hanh Buoi 4 - trấnction, locking va hieu nang",
+description="API thuc hanh Buoi 4 - transaction, locking va hieu nang",
 )
 
 
